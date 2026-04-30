@@ -4,85 +4,111 @@ import pandas as pd
 import os
 
 # Konfigurasi Halaman
-st.set_page_config(page_title="SQL Playground", page_icon="💻", layout="wide")
+st.set_page_config(page_title="Data Analyst SQL Assessment", page_icon="📝", layout="wide")
 
-st.title("💻 Streamlit SQL Playground")
-st.write("Jalankan query SQL langsung pada database yang sudah tersedia.")
+# Inisialisasi Session State untuk melacak nomor soal
+if 'current_q' not in st.session_state:
+    st.session_state.current_q = 0
+
+# --- DAFTAR SOAL & KUNCI JAWABAN ---
+# SILAKAN SESUAIKAN DENGAN TABEL DAN SOAL ANDA DI SINI
+questions = [
+    {
+        "task": "Tampilkan 5 baris pertama dari seluruh kolom yang ada di tabel `nama_tabel_anda`.",
+        "solution_query": "SELECT * FROM nama_tabel_anda LIMIT 5;"
+    },
+    {
+        "task": "Hitung total pendapatan (misal kolom `revenue`) dikelompokkan berdasarkan `kategori`.",
+        "solution_query": "SELECT kategori, SUM(revenue) as total_pendapatan FROM nama_tabel_anda GROUP BY kategori;"
+    },
+    {
+        "task": "Tampilkan nama pelanggan yang melakukan transaksi di atas nilai 1.000.000, urutkan dari yang terbesar.",
+        "solution_query": "SELECT nama_pelanggan, total_transaksi FROM nama_tabel_anda WHERE total_transaksi > 1000000 ORDER BY total_transaksi DESC;"
+    }
+]
+
+st.title("📝 SQL Assessment - Data Analyst")
+st.write("Selesaikan instruksi query di bawah ini. Jika hasil query Anda benar, Anda dapat melanjutkan ke soal berikutnya.")
 
 # --- KONFIGURASI DATABASE ---
-# Pastikan nama file sesuai dengan yang Anda upload di GitHub
 db_path = "SQLite.db" 
 
-# Mengecek apakah file database ada di dalam repository/folder
 if os.path.exists(db_path):
-    try:
-        # Koneksi langsung ke database SQLite lokal
-        conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path)
 
-        st.success("✅ Database berhasil terhubung!")
-
-        # Menampilkan daftar tabel yang ada di dalam database
-        st.subheader("Tabel yang Tersedia di Database")
+    # Menampilkan Skema Database di dalam Expander agar tidak memakan tempat
+    with st.expander("🔍 Klik untuk melihat Skema Database & Tabel", expanded=False):
         tables_query = "SELECT name FROM sqlite_master WHERE type='table';"
-        tables_df = pd.read_sql_query(tables_query, conn)
-        
-        if not tables_df.empty:
-            st.write("Klik pada nama tabel untuk melihat struktur kolom dan pratinjau data.")
-            
-            # Looping untuk membuat drop-down (expander) untuk setiap tabel
-            for table_name in tables_df['name']:
-                with st.expander(f"📁 Tabel: **{table_name}**"):
-                    
-                    # 1. Menampilkan struktur kolom menggunakan PRAGMA
+        try:
+            tables_df = pd.read_sql_query(tables_query, conn)
+            if not tables_df.empty:
+                for table_name in tables_df['name']:
+                    st.markdown(f"**Tabel: `{table_name}`**")
                     pragma_query = f"PRAGMA table_info('{table_name}');"
                     pragma_df = pd.read_sql_query(pragma_query, conn)
-                    
-                    st.markdown("**Struktur Kolom:**")
-                    # Hanya menampilkan kolom 'name' (nama kolom) dan 'type' (tipe data)
-                    st.dataframe(pragma_df[['name', 'type']], use_container_width=True, hide_index=True)
-                    
-                    # 2. Menampilkan pratinjau 5 baris pertama data
-                    st.markdown("**Pratinjau Data (Limit 5):**")
-                    sample_query = f"SELECT * FROM {table_name} LIMIT 5;"
-                    try:
-                        sample_df = pd.read_sql_query(sample_query, conn)
-                        st.dataframe(sample_df, use_container_width=True, hide_index=True)
-                    except Exception as e:
-                        st.warning(f"Tidak dapat memuat pratinjau data: {e}")
-                        
-        else:
-            st.warning("Tidak ada tabel yang ditemukan dalam database ini.")
+                    st.dataframe(pragma_df[['name', 'type']], hide_index=True)
+            else:
+                st.warning("Database kosong.")
+        except Exception as e:
+            st.error(f"Gagal memuat skema: {e}")
 
-        st.divider()
+    st.divider()
 
-        # Area untuk menulis Query SQL
-        st.subheader("📝 Tulis Query SQL Anda")
-        query = st.text_area(
-            "Masukkan query di bawah ini:", 
-            value="SELECT * FROM sqlite_master LIMIT 5;", 
-            height=150
+    # --- LOGIKA TES / SOAL ---
+    # Cek apakah kandidat sudah menyelesaikan semua soal
+    if st.session_state.current_q < len(questions):
+        q_index = st.session_state.current_q
+        current_question = questions[q_index]
+
+        st.subheader(f"Soal {q_index + 1} dari {len(questions)}")
+        st.info(f"**Instruksi:** {current_question['task']}")
+
+        # Area untuk kandidat menulis Query SQL
+        user_query = st.text_area(
+            "Tulis Query SQL Anda di sini:", 
+            height=150,
+            key=f"query_input_{q_index}" # Key unik agar text area reset setiap ganti soal
         )
 
         # Tombol eksekusi
-        if st.button("Jalankan Query", type="primary"):
-            if query.strip():
+        if st.button("Jalankan & Periksa Jawaban", type="primary"):
+            if user_query.strip():
                 try:
-                    # Menjalankan query dan mengubahnya menjadi DataFrame
-                    result_df = pd.read_sql_query(query, conn)
+                    # 1. Eksekusi query kandidat
+                    user_df = pd.read_sql_query(user_query, conn)
                     
-                    st.write(f"**Hasil Query:** ({result_df.shape[0]} baris, {result_df.shape[1]} kolom)")
-                    st.dataframe(result_df, use_container_width=True, hide_index=True)
+                    # 2. Eksekusi query kunci jawaban secara rahasia
+                    solution_df = pd.read_sql_query(current_question['solution_query'], conn)
+                    
+                    st.write("**Hasil Query Anda:**")
+                    st.dataframe(user_df, use_container_width=True, hide_index=True)
+
+                    # 3. Validasi (Membandingkan hasil DataFrame)
+                    # Kita reset index agar perbedaan urutan index pandas tidak membuat hasil dianggap salah
+                    if user_df.reset_index(drop=True).equals(solution_df.reset_index(drop=True)):
+                        st.success("✨ Jawaban Anda Benar!")
+                        
+                        # Tombol untuk lanjut ke soal berikutnya
+                        if st.button("Lanjut ke Soal Berikutnya"):
+                            st.session_state.current_q += 1
+                            st.rerun() # Refresh halaman untuk memuat soal baru
+                    else:
+                        st.error("❌ Jawaban masih kurang tepat atau hasil tabel tidak sesuai ekspektasi. Perhatikan nama kolom dan urutannya. Coba lagi!")
+                        
                 except Exception as e:
-                    # Menangkap error SQL
-                    st.error(f"Terjadi kesalahan pada query: {e}")
+                    st.error(f"Terjadi kesalahan pada query Anda: {e}")
             else:
                 st.warning("Silakan tulis query SQL terlebih dahulu.")
 
-        # Menutup koneksi
-        conn.close()
+    else:
+        # Jika semua soal selesai
+        st.balloons()
+        st.success("🎉 Selamat! Anda telah menyelesaikan semua soal Assessment SQL.")
+        if st.button("Ulangi Tes"):
+            st.session_state.current_q = 0
+            st.rerun()
 
-    except Exception as e:
-        st.error(f"Gagal membaca database: {e}")
+    conn.close()
+
 else:
-    st.error(f"⚠️ File database '{db_path}' tidak ditemukan.")
-    st.info("Pastikan nama file di variabel `db_path` sudah sama persis (termasuk huruf besar/kecil dan ekstensinya) dengan yang ada di GitHub Anda.")
+    st.error(f"⚠️ File database '{db_path}' tidak ditemukan di sistem.")

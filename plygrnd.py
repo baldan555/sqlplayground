@@ -1,30 +1,26 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import tempfile
 import os
 
 # Konfigurasi Halaman
 st.set_page_config(page_title="SQL Playground", page_icon="💻", layout="wide")
 
 st.title("💻 Streamlit SQL Playground")
-st.write("Upload file database SQLite Anda (.db atau .sqlite) dan mulai jalankan query SQL langsung dari browser.")
+st.write("Jalankan query SQL langsung pada database yang sudah tersedia.")
 
-# Uploader untuk file database
-uploaded_file = st.file_uploader("Pilih file Database SQLite", type=["db", "sqlite"])
+# --- KONFIGURASI DATABASE ---
+# Ganti "SQLite.db" dengan nama file database Anda yang ada di GitHub.
+# Jika nama filenya hanya "SQLite" tanpa ekstensi, tulis "SQLite".
+db_path = "SQLite.db" 
 
-if uploaded_file is not None:
-    # Streamlit membaca file ke memori, tapi SQLite butuh path file fisik.
-    # Jadi, kita simpan file upload ke temporary file.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
-        db_path = tmp_file.name
-
+# Mengecek apakah file database ada di dalam repository/folder
+if os.path.exists(db_path):
     try:
-        # Koneksi ke database SQLite
+        # Koneksi langsung ke database SQLite lokal
         conn = sqlite3.connect(db_path)
 
-        st.success("Database berhasil diunggah dan terkoneksi!")
+        st.success("✅ Database berhasil terhubung!")
 
         # Menampilkan daftar tabel yang ada di dalam database
         st.subheader("Tabel yang Tersedia di Database")
@@ -56,7 +52,7 @@ if uploaded_file is not None:
                     st.write(f"**Hasil Query:** ({result_df.shape[0]} baris, {result_df.shape[1]} kolom)")
                     st.dataframe(result_df, use_container_width=True)
                 except Exception as e:
-                    # Menangkap error SQL (misal typo nama kolom/tabel)
+                    # Menangkap error SQL
                     st.error(f"Terjadi kesalahan pada query: {e}")
             else:
                 st.warning("Silakan tulis query SQL terlebih dahulu.")
@@ -66,13 +62,6 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Gagal membaca database: {e}")
-    
-    finally:
-        # Membersihkan / menghapus file temporary setelah selesai digunakan
-        if os.path.exists(db_path):
-            try:
-                os.remove(db_path)
-            except:
-                pass
 else:
-    st.info("Silakan unggah database Anda untuk memulai.")
+    st.error(f"⚠️ File database '{db_path}' tidak ditemukan.")
+    st.info("Pastikan nama file di variabel `db_path` sudah sama persis (termasuk huruf besar/kecil dan ekstensinya) dengan yang ada di GitHub Anda.")
